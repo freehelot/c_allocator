@@ -15,9 +15,6 @@
 
 /* Macros and Constants */
 
-#define LINEAR_SEARCH (0U) 
-#define LINKED_LIST   (1U) 
-
 
 #ifdef ALLOC_BLOCK_SIZE
 #define BLOCK_SIZE (ALLOC_BLOCK_SIZE)
@@ -78,7 +75,6 @@ void block_init(void)
     COMPILE_TIME_ASSERT((BLOCK_SIZE % 4U) == 0U); /* 4 byte alignment */
     COMPILE_TIME_ASSERT((BLOCK_SIZE > 0U));
     COMPILE_TIME_ASSERT((BLOCK_NUMS > 0U));
-    COMPILE_TIME_ASSERT(LINEAR_SEARCH != LINKED_LIST); /* Both can't be used parallely */
     /* Initialize blocks to default value */
     BLOCK_MEMSET(staticPool, sizeof(staticPool), 0U);
     BLOCK_MEMSET(blockUsed, sizeof(blockUsed), BLOCK_UNUSED);
@@ -103,7 +99,6 @@ void * block_alloc(void)
         /* Static pool available */
 
         /* Linear search - becomes inneficient as the pool grows */
-#if (LINEAR_SEARCH == 1U) && (LINKED_LIST == 0U)
         /* Find first free block */
         for(size_t index = 0U; index < (size_t)BLOCK_NUMS; index++)
         {
@@ -116,9 +111,6 @@ void * block_alloc(void)
                 break;
             }
         }
-#elif (LINEAR_SEARCH == 0U) && (LINKED_LIST == 1U)
-
-#endif
     }
     else
     {
