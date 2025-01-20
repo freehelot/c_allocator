@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Definitions to be used within source code
-add_definitions(-DALLOC_BLOCK_SIZE=32 -DALLOC_NUM_BLOCKS=10)
+add_definitions(-DALLOC_BLOCK_SIZE=16 -DALLOC_NUM_BLOCKS=10)
 
 # Define options to chose between release and unit tests
 option(BUILD_UNIT_TESTS "Build the project with unit tests" OFF)

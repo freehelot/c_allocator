@@ -58,11 +58,21 @@
 
 /* Type definitions */
 
+/**
+ * @brief Block structure (linked list) containing pointer and data structure
+ * Extra care with alignment is required for handling linked lists,
+ * compiler might add extra padding (memory overhead, possible fragmentation)
+ * 
+ */
+typedef struct freeBlock {
+    struct freeBlock *next;     // Pointer to next block
+    uint8_t data[BLOCK_SIZE];   // Data inside block
+} freeBlock_t;
+
 /* Static variables */
-static uint8_t staticPool[BLOCK_SIZE * BLOCK_NUMS]; /* Static memory pool */
-static uint8_t blockUsed[BLOCK_NUMS];               /* Block used flag per block */
-static size_t blockNumUsed;                         /* Number of blocks used */
-static ATOMIC uint8_t blockMux;                     /* Block mutex */
+static uint8_t  staticPool[BLOCK_SIZE * BLOCK_NUMS];    /* Static memory pool */
+static freeBlock_t * freeList;                          /* Free Block List */
+static ATOMIC uint8_t blockMux;                         /* Block mutex */
 
 /* Static function prototypes */
 
@@ -75,14 +85,25 @@ static ATOMIC uint8_t blockMux;                     /* Block mutex */
 void block_init(void)
 {
     /* Compile time asserts (sanity checks) */
-    COMPILE_TIME_ASSERT((BLOCK_SIZE % 4U) == 0U); /* 4 byte alignment */
+    COMPILE_TIME_ASSERT((BLOCK_SIZE % 4U) == 0U); /* 4 byte alignment for correct structure alignment */
+    COMPILE_TIME_ASSERT((BLOCK_SIZE * BLOCK_NUMS) % (4 + 16) == 0U); // Correct alignment of structure and size needed
     COMPILE_TIME_ASSERT((BLOCK_SIZE > 0U));
     COMPILE_TIME_ASSERT((BLOCK_NUMS > 0U));
-    COMPILE_TIME_ASSERT(LINEAR_SEARCH != LINKED_LIST); /* Both can't be used parallely */
+    
     /* Initialize blocks to default value */
     BLOCK_MEMSET(staticPool, sizeof(staticPool), 0U);
-    BLOCK_MEMSET(blockUsed, sizeof(blockUsed), BLOCK_UNUSED);
-    blockNumUsed = 0U;
+
+    /* Initialize linked list */
+    freeList = (freeBlock_t *)staticPool;
+    for(size_t index = 0; index < BLOCK_NUMS - 1; ++index)
+    {
+        freeBlock_t * curBlock = (freeBlock_t *)(staticPool + index * BLOCK_SIZE);
+        BLOCK_MEMSET(curBlock->data, BLOCK_SIZE, 0U);
+        curBlock->next = (freeBlock_t *)(staticPool + (index + 1) * BLOCK_SIZE);
+    }
+    freeBlock_t * lastBlock = (freeBlock_t *)(staticPool + (BLOCK_NUMS - 1) * BLOCK_SIZE);
+    lastBlock->next = NULL;
+
     /* Initialize mutex/locks */
     blockMux = 0U;
 }
@@ -94,31 +115,15 @@ void block_init(void)
  */
 void * block_alloc(void)
 {
-    uint8_t * pAddr = NULL;
+    freeBlock_t * pAddr = NULL;
     /* Lock allocator */
     MUX_LOCK(&blockMux);
-    /* Check if there are free blocks - parse through data only if memory available */
-    if ((size_t)BLOCK_NUMS > blockNumUsed) /* Data race issue possible if this variable is not protected with mutex*/
+
+    /* Linked list search - already full */
+    if (NULL != freeList)
     {
-        /* Static pool available */
-
-        /* Linear search - becomes inneficient as the pool grows */
-#if (LINEAR_SEARCH == 1U) && (LINKED_LIST == 0U)
-        /* Find first free block */
-        for(size_t index = 0U; index < (size_t)BLOCK_NUMS; index++)
-        {
-            if (BLOCK_USED != blockUsed[index])
-            {
-                /* Block found */
-                blockUsed[index] = BLOCK_USED;
-                pAddr = (uint8_t *)&staticPool[index * BLOCK_SIZE];
-                blockNumUsed++;
-                break;
-            }
-        }
-#elif (LINEAR_SEARCH == 0U) && (LINKED_LIST == 1U)
-
-#endif
+        pAddr = freeList;
+        freeList = freeList->next;
     }
     else
     {
@@ -128,7 +133,7 @@ void * block_alloc(void)
     /* Unlock block allocator */
     MUX_UNLOCK(&blockMux);
 
-    return pAddr;
+    return (void *)pAddr;
 }
 
 /**
@@ -143,16 +148,12 @@ void block_free(void * pBlock)
     /* NULL Check and pointer alignment verification */
     if((NULL != pBlock) || (IS_PTR_ALIGNED(pBlock, staticPool)))
     {
-        /* Verify double free before proceeding */
-        size_t index = BLOCK_PTR_2_INDEX(pBlock, staticPool);
-        if (BLOCK_USED == blockUsed[index])
-        {
-            /* Free block */
-            BLOCK_MEMSET(pBlock, BLOCK_SIZE, 0U);
-            blockUsed[index] = BLOCK_UNUSED;
-            blockNumUsed--;
-        }
-    }
+        freeBlock_t * pAddrFree = (freeBlock_t *)pBlock;
+        /* Erase data in the block */
+        BLOCK_MEMSET(pAddrFree->data, BLOCK_SIZE, 0U);
+        pAddrFree->next = freeList;
+        freeList = pAddrFree;
+    }   
     else
     {
         /* Do nothing */

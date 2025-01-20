@@ -8,6 +8,13 @@
 /* Filest under test includes */
 #include "block.h"
 
+
+typedef struct freeBlock {
+    struct freeBlock *next;     // Pointer to next block
+    uint8_t data[ALLOC_BLOCK_SIZE];   // Data inside block
+} freeBlock_t;
+
+
 void setUp(void)
 {
     /* Only block initialization is needed as all the buffers are cleared on init */
@@ -35,7 +42,7 @@ void test_alloc(void)
 void test_nomem_alloc(void)
 {
     // Given
-    size_t num_of_blocks = 10; // Defined in block.c
+    size_t num_of_blocks = ALLOC_NUM_BLOCKS; // Defined in CMake
     // Allocation should succeed until end of block size
     for (size_t index = 0; index < num_of_blocks; index ++)
     {
@@ -51,40 +58,44 @@ void test_nomem_alloc(void)
 void test_dealloc(void)
 {
     // Given
-    uint8_t * pBlock = block_alloc(); // Expected non-null
-    TEST_ASSERT_NOT_EQUAL(NULL, pBlock);
-    *pBlock = 0xFFU; // Alocate value to first byte of block
-    TEST_ASSERT_EQUAL(0xFFU, *pBlock); // Verify data is indeed written
+    freeBlock_t * pBlock = (freeBlock_t *)block_alloc(); // Casting to correct alignment
+    TEST_ASSERT_NOT_EQUAL(NULL, pBlock); // Expected non-null
+    pBlock->data[0]= 0xFFU; // Allocate data
+    TEST_ASSERT_EQUAL(0xFFU, pBlock->data[0]); // Verify data is indeed written
     // When
-    block_free(pBlock); // Free Block
+    block_free((void *)pBlock); // Free Block
     // Then
-    TEST_ASSERT_EQUAL(0U, *pBlock); // Expected erased block
+    TEST_ASSERT_EQUAL(0U, pBlock->data[0]); // Expected erased block
 }
 
 /* Test dealocation and allocation between blocks */
 void test_inbetween_alloc(void)
 {
     // Given
-    uint8_t *pBlock = NULL;
-    uint8_t *pTestBlock = NULL; // Inbetween block
-    size_t num_of_blocks = 10; // Defined in block.c
-    size_t blockSize = 32;
+    freeBlock_t *pBlock = NULL;
+    freeBlock_t *pTestBlock = NULL; // Inbetween block
+    size_t num_of_blocks = ALLOC_NUM_BLOCKS; // Defined in block.c
+    size_t blockSize = ALLOC_BLOCK_SIZE;
     for(size_t index = 0; index <  num_of_blocks; index++)
     {
-        pBlock = block_alloc();
+        pBlock = (freeBlock_t *)block_alloc();
+        if((num_of_blocks / 2) == index)
+        {
+            pTestBlock = pBlock;
+        }
         TEST_ASSERT_NOT_EQUAL(NULL, pBlock);
     }
     // All blocks are allocated, expect null on consecutive call
     TEST_ASSERT_EQUAL(NULL, block_alloc());
     // When
-    pTestBlock = (pBlock - (blockSize * (num_of_blocks / 2))); // Within the number of blocks
     TEST_ASSERT_NOT_EQUAL(NULL, pTestBlock);
-    *pTestBlock = 0xBA; // Allocate some value to buffer
+    TEST_ASSERT_NOT_EQUAL(pBlock, pTestBlock);
+    pTestBlock->data[0] = 0xBA; // Allocate some value to buffer
     // Verify data is indeed written
-    TEST_ASSERT_EQUAL(0xBA, *pTestBlock);
+    TEST_ASSERT_EQUAL(0xBA, pTestBlock->data[0]);
     block_free(pTestBlock);
     // Then
-    TEST_ASSERT_EQUAL(0U, *pTestBlock);
+    TEST_ASSERT_EQUAL(0U, pTestBlock->data[0]);
     // Allocating new block should pass
     TEST_ASSERT_NOT_EQUAL(NULL, block_alloc());
 
@@ -94,14 +105,14 @@ void test_inbetween_alloc(void)
 void test_dealloc_nonaligned(void)
 {
     // Given
-    uint8_t * pBlock = block_alloc();
+    freeBlock_t * pBlock = (freeBlock_t *)block_alloc();
     TEST_ASSERT_NOT_EQUAL(NULL, pBlock);
-    *pBlock = 0xFFU; // Alocate value to first byte of block
-    TEST_ASSERT_EQUAL(0xFFU, *pBlock); // Verify data is indeed written    
+    pBlock->data[0] = 0xFFU; // Alocate value to first byte of block
+    TEST_ASSERT_EQUAL(0xFFU, pBlock->data[0]); // Verify data is indeed written    
     // When
     block_free(pBlock + 1); // Incorrect alignment given to free
     // Then
-    TEST_ASSERT_EQUAL(0xFFU, *pBlock); // Data should still persist 
+    TEST_ASSERT_EQUAL(0xFFU, pBlock->data[0]); // Data should still persist 
 }
 
 int main(void)
