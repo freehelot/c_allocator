@@ -15,9 +15,6 @@
 
 /* Macros and Constants */
 
-#define LINEAR_SEARCH (0U) 
-#define LINKED_LIST   (1U) 
-
 
 #ifdef ALLOC_BLOCK_SIZE
 #define BLOCK_SIZE (ALLOC_BLOCK_SIZE)
@@ -61,7 +58,7 @@
 /**
  * @brief Block structure (linked list) containing pointer and data structure
  * Extra care with alignment is required for handling linked lists,
- * compiler might add extra padding (memory overhead, possible fragmentation)
+ * compiler might add extra padding so further investigation is required
  * 
  */
 typedef struct freeBlock {
@@ -90,7 +87,7 @@ void block_init(void)
     COMPILE_TIME_ASSERT((BLOCK_SIZE > 0U));
     COMPILE_TIME_ASSERT((BLOCK_NUMS > 0U));
     
-    /* Initialize blocks to default value */
+    /* Initialize static pool to default value */
     BLOCK_MEMSET(staticPool, sizeof(staticPool), 0U);
 
     /* Initialize linked list */
@@ -101,6 +98,7 @@ void block_init(void)
         BLOCK_MEMSET(curBlock->data, BLOCK_SIZE, 0U);
         curBlock->next = (freeBlock_t *)(staticPool + (index + 1) * BLOCK_SIZE);
     }
+    /* End of head should point to NULL */
     freeBlock_t * lastBlock = (freeBlock_t *)(staticPool + (BLOCK_NUMS - 1) * BLOCK_SIZE);
     lastBlock->next = NULL;
 
@@ -146,7 +144,7 @@ void block_free(void * pBlock)
     /* Lock block allocator */
     MUX_LOCK(&blockMux);
     /* NULL Check and pointer alignment verification */
-    if((NULL != pBlock) || (IS_PTR_ALIGNED(pBlock, staticPool)))
+    if((NULL != pBlock) && (IS_PTR_ALIGNED(pBlock, staticPool)))
     {
         freeBlock_t * pAddrFree = (freeBlock_t *)pBlock;
         /* Erase data in the block */
