@@ -57,5 +57,5 @@ Macros for mutex lock/unlock have been left empty as it is really target and OS 
 
 #### Allocator implementation
 2 options for allocator are available:
-1. Linear search - becomes inneficient as the static pool grows. Available on master branch.
-2. Linked list - possible memory overhead with padding in linked list structure, faster then linear search option. Available on linked list feature branch.
+1. Linear search - becomes inneficient as the static pool grows but might be more efficient for implementations where low number of block numbers is required. Available on master branch.
+2. Linked list - possible memory overhead with padding in linked list structure, further investigation and adaptation would be required depending on target and how compiler pads the structure. Faster then linear search option if number of blocks is higher. Available on linked list feature branch.
