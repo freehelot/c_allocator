@@ -37,7 +37,7 @@
  * @brief Set buffer elements of defined size to filler value
  */
 #define BLOCK_MEMSET(buffer, size, filler) \
-    for (size_t index = 0; index < (size); index++) { \
+    for (size_t index = 0U; index < (size); index++) { \
         ((uint8_t *)(buffer))[index] = (filler); \
         }
 
@@ -58,8 +58,8 @@
 /* Static variables */
 static uint8_t staticPool[BLOCK_SIZE * BLOCK_NUMS]; /* Static memory pool */
 static uint8_t blockUsed[BLOCK_NUMS];               /* Block used flag per block */
-static size_t blockNumUsed;                         /* Number of blocks used */
-static ATOMIC uint8_t blockMux;                     /* Block mutex */
+static size_t blockNumUsed     = 0U;                /* Number of blocks used */
+static ATOMIC uint8_t blockMux = 0U;                /* Block mutex */
 
 /* Static function prototypes */
 
@@ -102,13 +102,17 @@ void * block_alloc(void)
         /* Find first free block */
         for(size_t index = 0U; index < (size_t)BLOCK_NUMS; index++)
         {
-            if (BLOCK_USED != blockUsed[index])
+            if (BLOCK_UNUSED == blockUsed[index])
             {
                 /* Block found */
                 blockUsed[index] = BLOCK_USED;
                 pAddr = (uint8_t *)&staticPool[index * BLOCK_SIZE];
                 blockNumUsed++;
                 break;
+            }
+            else
+            {
+                /* No free blocks */
             }
         }
     }
@@ -133,7 +137,7 @@ void block_free(void * pBlock)
     /* Lock block allocator */
     MUX_LOCK(&blockMux);
     /* NULL Check and pointer alignment verification */
-    if((NULL != pBlock) || (IS_PTR_ALIGNED(pBlock, staticPool)))
+    if((NULL != pBlock) && (IS_PTR_ALIGNED(pBlock, staticPool)))
     {
         /* Verify double free before proceeding */
         size_t index = BLOCK_PTR_2_INDEX(pBlock, staticPool);
@@ -142,7 +146,11 @@ void block_free(void * pBlock)
             /* Free block */
             BLOCK_MEMSET(pBlock, BLOCK_SIZE, 0U);
             blockUsed[index] = BLOCK_UNUSED;
-            blockNumUsed--;
+            blockNumUsed--; // Underflow not possible
+        }
+        else
+        {
+            /* Do nothing */
         }
     }
     else

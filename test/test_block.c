@@ -5,8 +5,21 @@
 #include <stdio.h>
 #include <stdint.h>
 
-/* Filest under test includes */
+/* Files under test includes */
 #include "block.h"
+
+#ifdef ALLOC_BLOCK_SIZE
+#define BLOCK_SIZE (ALLOC_BLOCK_SIZE)
+#else
+#define BLOCK_SIZE (32U) // Default value
+#endif
+
+#ifdef ALLOC_NUM_BLOCKS
+#define BLOCK_NUMS (ALLOC_NUM_BLOCKS)
+#else
+#define BLOCK_NUMS (10U) // Default value
+#endif
+
 
 void setUp(void)
 {
@@ -35,9 +48,9 @@ void test_alloc(void)
 void test_nomem_alloc(void)
 {
     // Given
-    size_t num_of_blocks = 10; // Defined in block.c
+    size_t num_of_blocks = BLOCK_NUMS; 
     // Allocation should succeed until end of block size
-    for (size_t index = 0; index < num_of_blocks; index ++)
+    for (size_t index = 0U; index < num_of_blocks; index ++)
     {
         TEST_ASSERT_NOT_EQUAL(NULL, block_alloc());
     }
@@ -67,9 +80,9 @@ void test_inbetween_alloc(void)
     // Given
     uint8_t *pBlock = NULL;
     uint8_t *pTestBlock = NULL; // Inbetween block
-    size_t num_of_blocks = 10; // Defined in block.c
-    size_t blockSize = 32;
-    for(size_t index = 0; index <  num_of_blocks; index++)
+    size_t num_of_blocks = BLOCK_NUMS; // Defined in block.c
+    size_t blockSize = BLOCK_SIZE;
+    for(size_t index = 0U; index <  num_of_blocks; index++)
     {
         pBlock = block_alloc();
         TEST_ASSERT_NOT_EQUAL(NULL, pBlock);
@@ -99,7 +112,7 @@ void test_dealloc_nonaligned(void)
     *pBlock = 0xFFU; // Alocate value to first byte of block
     TEST_ASSERT_EQUAL(0xFFU, *pBlock); // Verify data is indeed written    
     // When
-    block_free(pBlock + 1); // Incorrect alignment given to free
+    block_free(pBlock + 1U); // Incorrect alignment given to free
     // Then
     TEST_ASSERT_EQUAL(0xFFU, *pBlock); // Data should still persist 
 }
